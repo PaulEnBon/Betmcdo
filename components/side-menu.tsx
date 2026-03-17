@@ -1,23 +1,28 @@
 "use client";
 
+import { ComponentType } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { History, Home, LogOut, ScrollText, Trophy, UserCircle2, X } from "lucide-react";
-import { User } from "@/types/bet";
+import { UserRow } from "@/types/bet";
+
+type SideMenuSection = "home" | "history" | "leaderboard" | "rules";
 
 type SideMenuProps = {
   isOpen: boolean;
   onClose: () => void;
-  user: User;
+  onNavigate: (section: SideMenuSection) => void;
+  activeSection: SideMenuSection;
+  user: UserRow;
 };
 
-const links = [
-  { label: "Accueil", icon: Home },
-  { label: "Mon Historique", icon: History },
-  { label: "Classement", icon: Trophy },
-  { label: "Règles du jeu", icon: ScrollText },
+const links: Array<{ key: SideMenuSection; label: string; icon: ComponentType<{ className?: string }> }> = [
+  { key: "home", label: "Accueil", icon: Home },
+  { key: "history", label: "Mon Historique", icon: History },
+  { key: "leaderboard", label: "Classement", icon: Trophy },
+  { key: "rules", label: "Règles du jeu", icon: ScrollText },
 ];
 
-export function SideMenu({ isOpen, onClose, user }: SideMenuProps) {
+export function SideMenu({ isOpen, onClose, onNavigate, activeSection, user }: SideMenuProps) {
   return (
     <AnimatePresence>
       {isOpen && (
@@ -39,15 +44,15 @@ export function SideMenu({ isOpen, onClose, user }: SideMenuProps) {
           >
             <div className="mb-6 flex items-start justify-between">
               <div className="flex items-center gap-3">
-                {user.avatarUrl ? (
+                {user.avatar_url ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={user.avatarUrl} alt={user.name} className="h-12 w-12 rounded-full object-cover" />
+                  <img src={user.avatar_url} alt={user.username} className="h-12 w-12 rounded-full object-cover" />
                 ) : (
                   <UserCircle2 className="h-12 w-12 text-green-400" />
                 )}
                 <div>
-                  <p className="text-sm font-semibold text-slate-100">{user.name}</p>
-                  <p className="text-xs font-extrabold text-amber-300">{user.nuggets.toFixed(2)} Nuggets</p>
+                  <p className="text-sm font-semibold text-slate-100">{user.username}</p>
+                  <p className="text-xs font-extrabold text-amber-300">{user.nuggets_balance.toFixed(2)} Nuggets</p>
                 </div>
               </div>
 
@@ -66,7 +71,15 @@ export function SideMenu({ isOpen, onClose, user }: SideMenuProps) {
                 return (
                   <button
                     key={item.label}
-                    className="flex w-full items-center gap-3 rounded-xl bg-slate-800 px-3 py-3 text-sm font-semibold text-slate-200 transition hover:bg-slate-700 hover:text-green-400"
+                    onClick={() => {
+                      onNavigate(item.key);
+                      onClose();
+                    }}
+                    className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold transition ${
+                      activeSection === item.key
+                        ? "bg-slate-700 text-green-400"
+                        : "bg-slate-800 text-slate-200 hover:bg-slate-700 hover:text-green-400"
+                    }`}
                   >
                     <Icon className="h-4 w-4" />
                     {item.label}
@@ -85,3 +98,5 @@ export function SideMenu({ isOpen, onClose, user }: SideMenuProps) {
     </AnimatePresence>
   );
 }
+
+export type { SideMenuSection };

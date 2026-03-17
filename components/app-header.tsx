@@ -1,8 +1,8 @@
 import { Coins, Menu } from "lucide-react";
-import { User } from "@/types/bet";
+import { UserRow } from "@/types/bet";
 
 type AppHeaderProps = {
-  user: User;
+  user: UserRow;
   isLoading?: boolean;
   onOpenMenu: () => void;
 };
@@ -26,7 +26,7 @@ export function AppHeader({ user, isLoading = false, onOpenMenu }: AppHeaderProp
 
         <div className="inline-flex items-center gap-2 rounded-full bg-green-500 px-3 py-2 text-sm font-extrabold text-slate-950 shadow-sm">
           <Coins className="h-4 w-4" />
-          <span>{isLoading ? "..." : user.nuggets.toFixed(2)} Nuggets</span>
+          <span>{isLoading ? "..." : user.nuggets_balance.toFixed(2)} Nuggets</span>
         </div>
       </div>
     </header>

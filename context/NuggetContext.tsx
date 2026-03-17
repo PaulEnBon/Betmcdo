@@ -1,27 +1,30 @@
 "use client";
 
-import { createContext, useCallback, useContext, useMemo, useState } from "react";
-import { mockBets } from "@/lib/mock-data";
-import { Bet, User } from "@/types/bet";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
+import {
+  closeBet as closeBetService,
+  createBet,
+  deleteBet as deleteBetService,
+  fetchBets,
+  fetchCurrentUser,
+  fetchUserWagers,
+  fetchUsers,
+  placeWager,
+  resolveBet as resolveBetService,
+} from "@/services/db-simulation";
+import { BetFilter, BetWithOptions, UserRow, WagerWithContext } from "@/types/bet";
 
 type BetSlipSelection = {
-  betId: string;
-  optionId: string;
-  optionLabel: string;
+  bet_id: string;
+  option_id: string;
+  option_title: string;
   odds: number;
-};
-
-type PlacedBet = {
-  id: string;
-  legs: BetSlipSelection[];
-  amount: number;
-  combinedOdds: number;
-  settled: boolean;
-  outcome?: "won" | "lost";
 };
 
 type NewBetInput = {
   title: string;
+  description: string;
   option1: string;
   option2: string;
   odds1: number;
@@ -40,9 +43,14 @@ type ResolveBetResult = {
 };
 
 type NuggetContextValue = {
-  currentUser: User;
+  currentUser: UserRow;
+  bets: BetWithOptions[];
+  wagers: WagerWithContext[];
+  users: UserRow[];
   isLoading: boolean;
-  bets: Bet[];
+  isBetting: boolean;
+  activeFilter: BetFilter;
+  setActiveFilter: (filter: BetFilter) => void;
   betSlipSelections: BetSlipSelection[];
   selectedOptions: Record<string, string | undefined>;
   addToBetSlip: (betId: string, optionId: string) => "added" | "replaced" | "removed" | "ignored";
@@ -50,264 +58,244 @@ type NuggetContextValue = {
   clearBetSlip: () => void;
   placeBet: (amount: number) => Promise<PlaceBetResult>;
   addBet: (newBet: NewBetInput) => Promise<void>;
+  closeBet: (betId: string) => Promise<boolean>;
   resolveBet: (betId: string, winningOptionId: string) => Promise<ResolveBetResult>;
   deleteBet: (betId: string) => Promise<boolean>;
+  refreshAll: () => Promise<void>;
 };
 
 const NuggetContext = createContext<NuggetContextValue | null>(null);
-const fakeLatency = (ms = 500) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const initialUser: UserRow = {
+  id: "user-1",
+  username: "Moi",
+  nuggets_balance: 500,
+  created_at: new Date().toISOString(),
+};
 
 export function NuggetProvider({ children }: { children: React.ReactNode }) {
-  const [currentUser, setCurrentUser] = useState<User>({
-    id: "user-1",
-    name: "Moi",
-    nuggets: 500,
-  });
-  const [isLoading, setIsLoading] = useState(false);
-  const [bets, setBets] = useState<Bet[]>(mockBets);
+  const [currentUser, setCurrentUser] = useState<UserRow>(initialUser);
+  const [users, setUsers] = useState<UserRow[]>([]);
+  const [bets, setBets] = useState<BetWithOptions[]>([]);
+  const [wagers, setWagers] = useState<WagerWithContext[]>([]);
+  const [activeFilter, setActiveFilter] = useState<BetFilter>("all");
+
+  const [isLoading, setIsLoading] = useState(true);
+  const [isBetting, setIsBetting] = useState(false);
+
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string | undefined>>({});
   const [betSlipSelections, setBetSlipSelections] = useState<BetSlipSelection[]>([]);
-  const [, setPlacedBets] = useState<PlacedBet[]>([]);
 
-  const addToBetSlip = useCallback((betId: string, optionId: string) => {
-    const bet = bets.find((item) => item.id === betId);
-    if (!bet || bet.status !== "active") return "ignored" as const;
+  const refreshAll = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const [userData, betsData, wagersData, usersData] = await Promise.all([
+        fetchCurrentUser(currentUser.id),
+        fetchBets(),
+        fetchUserWagers(currentUser.id),
+        fetchUsers(),
+      ]);
 
-    const selected = bet.options.find((option) => option.id === optionId);
-    if (!selected) return "ignored" as const;
+      setCurrentUser(userData);
+      setBets(betsData);
+      setWagers(wagersData);
+      setUsers(usersData);
+    } catch (error) {
+      toast.error("Impossible de charger les données.");
+      console.error(error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [currentUser.id]);
 
-    let action: "added" | "replaced" | "removed" = "added";
+  useEffect(() => {
+    void refreshAll();
+  }, [refreshAll]);
 
-    setBetSlipSelections((prev) => {
-      const existingForBet = prev.find((item) => item.betId === betId);
+  const addToBetSlip = useCallback(
+    (betId: string, optionId: string) => {
+      const bet = bets.find((item) => item.id === betId);
+      if (!bet || bet.status !== "open") return "ignored" as const;
 
-      if (existingForBet?.optionId === optionId) {
-        action = "removed";
-        return prev.filter((item) => item.betId !== betId);
-      }
+      const selected = bet.options.find((option) => option.id === optionId);
+      if (!selected) return "ignored" as const;
 
-      if (existingForBet) {
-        action = "replaced";
-      }
+      let action: "added" | "replaced" | "removed" = "added";
 
-      const nextSelection: BetSlipSelection = {
-        betId,
-        optionId,
-        optionLabel: selected.label,
-        odds: selected.odds,
-      };
+      setBetSlipSelections((prev) => {
+        const existingForBet = prev.find((item) => item.bet_id === betId);
 
-      return [...prev.filter((item) => item.betId !== betId), nextSelection];
-    });
+        if (existingForBet?.option_id === optionId) {
+          action = "removed";
+          return prev.filter((item) => item.bet_id !== betId);
+        }
 
-    return action;
-  }, [bets]);
+        if (existingForBet) {
+          action = "replaced";
+        }
+
+        return [
+          ...prev.filter((item) => item.bet_id !== betId),
+          {
+            bet_id: betId,
+            option_id: optionId,
+            option_title: selected.title,
+            odds: selected.odds,
+          },
+        ];
+      });
+
+      return action;
+    },
+    [bets],
+  );
 
   const removeFromBetSlip = useCallback((betId: string) => {
-    setBetSlipSelections((prev) => prev.filter((item) => item.betId !== betId));
+    setBetSlipSelections((prev) => prev.filter((item) => item.bet_id !== betId));
   }, []);
 
   const clearBetSlip = useCallback(() => {
     setBetSlipSelections([]);
   }, []);
 
-  const placeBet = useCallback(async (amount: number): Promise<PlaceBetResult> => {
-    setIsLoading(true);
-    await fakeLatency();
+  const placeBet = useCallback(
+    async (amount: number): Promise<PlaceBetResult> => {
+      if (betSlipSelections.length === 0) {
+        return { ok: false, reason: "NO_SELECTION" };
+      }
 
-    if (betSlipSelections.length === 0) {
-      setIsLoading(false);
-      return { ok: false, reason: "NO_SELECTION" };
-    }
+      if (currentUser.nuggets_balance < amount) {
+        return { ok: false, reason: "INSUFFICIENT_FUNDS" };
+      }
 
-    if (currentUser.nuggets < amount) {
-      setIsLoading(false);
-      return { ok: false, reason: "INSUFFICIENT_FUNDS" };
-    }
+      try {
+        setIsBetting(true);
 
-    const combinedOdds = betSlipSelections.reduce((acc, leg) => acc * leg.odds, 1);
-    const amountPerSelection = amount / betSlipSelections.length;
-
-    setCurrentUser((prev) => ({ ...prev, nuggets: prev.nuggets - amount }));
-
-    setSelectedOptions((prev) => {
-      const next = { ...prev };
-      betSlipSelections.forEach((leg) => {
-        next[leg.betId] = leg.optionId;
-      });
-      return next;
-    });
-
-    setPlacedBets((prev) => [
-      ...prev,
-      {
-        id: crypto.randomUUID(),
-        legs: betSlipSelections,
-        amount,
-        combinedOdds,
-        settled: false,
-      },
-    ]);
-
-    setBets((prev) =>
-      prev.map((bet) => {
-        const selectedLeg = betSlipSelections.find((leg) => leg.betId === bet.id);
-        if (!selectedLeg) return bet;
-
-        return {
-          ...bet,
-          options: bet.options.map((option) =>
-            option.id === selectedLeg.optionId
-              ? { ...option, pot: option.pot + amountPerSelection }
-              : option,
-          ) as Bet["options"],
-        };
-      }),
-    );
-
-    setBetSlipSelections([]);
-    setIsLoading(false);
-
-    return { ok: true };
-  }, [betSlipSelections, currentUser.nuggets]);
-
-  const resolveBet = useCallback(async (betId: string, winningOptionId: string): Promise<ResolveBetResult> => {
-    setIsLoading(true);
-    await fakeLatency();
-
-    const targetBet = bets.find((bet) => bet.id === betId);
-    if (!targetBet) {
-      setIsLoading(false);
-      return { ok: false, payout: 0 };
-    }
-
-    if (targetBet.status === "resolved") {
-      setIsLoading(false);
-      return { ok: false, payout: 0, reason: "ALREADY_RESOLVED" };
-    }
-
-    let payout = 0;
-
-    const nextBets = bets.map((bet) =>
-      bet.id === betId
-        ? {
-            ...bet,
-            status: "resolved" as const,
-            winningOptionId,
-          }
-        : bet,
-    );
-
-    const resolvedBetMap = new Map(nextBets.map((bet) => [bet.id, bet]));
-
-    setPlacedBets((prev) =>
-      prev.map((ticket) => {
-        if (ticket.settled) return ticket;
-
-        const legsResult = ticket.legs.map((leg) => {
-          const legBet = resolvedBetMap.get(leg.betId);
-
-          if (!legBet || legBet.status !== "resolved") {
-            return "pending" as const;
-          }
-
-          return legBet.winningOptionId === leg.optionId ? "won" as const : "lost" as const;
+        await placeWager({
+          user_id: currentUser.id,
+          selections: betSlipSelections.map((s) => ({ bet_id: s.bet_id, option_id: s.option_id })),
+          amount,
         });
 
-        if (legsResult.includes("lost")) {
-          return {
-            ...ticket,
-            settled: true,
-            outcome: "lost",
-          };
+        setSelectedOptions((prev) => {
+          const next = { ...prev };
+          betSlipSelections.forEach((s) => {
+            next[s.bet_id] = s.option_id;
+          });
+          return next;
+        });
+
+        setBetSlipSelections([]);
+        await refreshAll();
+        return { ok: true };
+      } catch (error) {
+        toast.error("Échec de placement du pari.");
+        console.error(error);
+        return { ok: false, reason: "INSUFFICIENT_FUNDS" };
+      } finally {
+        setIsBetting(false);
+      }
+    },
+    [betSlipSelections, currentUser.id, currentUser.nuggets_balance, refreshAll],
+  );
+
+  const addBet = useCallback(
+    async (newBet: NewBetInput) => {
+      try {
+        setIsLoading(true);
+        await createBet({
+          creator_id: currentUser.id,
+          title: newBet.title,
+          description: newBet.description,
+          option_1_title: newBet.option1,
+          option_1_odds: newBet.odds1,
+          option_2_title: newBet.option2,
+          option_2_odds: newBet.odds2,
+        });
+        await refreshAll();
+      } catch (error) {
+        toast.error("Échec de création du pari.");
+        console.error(error);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [currentUser.id, refreshAll],
+  );
+
+  const closeBet = useCallback(
+    async (betId: string) => {
+      try {
+        setIsLoading(true);
+        await closeBetService(betId);
+        await refreshAll();
+        return true;
+      } catch (error) {
+        toast.error("Impossible de bloquer les mises.");
+        console.error(error);
+        return false;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [refreshAll],
+  );
+
+  const resolveBet = useCallback(
+    async (betId: string, winningOptionId: string): Promise<ResolveBetResult> => {
+      try {
+        setIsLoading(true);
+        const payout = await resolveBetService(betId, winningOptionId);
+        await refreshAll();
+        return { ok: true, payout };
+      } catch (error) {
+        console.error(error);
+        if (error instanceof Error && error.message.includes("déjà")) {
+          return { ok: false, payout: 0, reason: "ALREADY_RESOLVED" };
         }
+        toast.error("Impossible de résoudre ce pari.");
+        return { ok: false, payout: 0 };
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [refreshAll],
+  );
 
-        if (legsResult.every((result) => result === "won")) {
-          payout += ticket.amount * ticket.combinedOdds;
+  const deleteBet = useCallback(
+    async (betId: string) => {
+      const target = bets.find((b) => b.id === betId);
+      if (!target || target.creator_id !== currentUser.id) {
+        return false;
+      }
 
-          return {
-            ...ticket,
-            settled: true,
-            outcome: "won",
-          };
-        }
-
-        return ticket;
-      }),
-    );
-
-    if (payout > 0) {
-      setCurrentUser((prev) => ({ ...prev, nuggets: prev.nuggets + payout }));
-    }
-
-    setBets(nextBets);
-    setIsLoading(false);
-
-    return { ok: true, payout };
-  }, [bets]);
-
-  const addBet = useCallback(async (newBet: NewBetInput) => {
-    setIsLoading(true);
-    await fakeLatency();
-
-    setBets((prev) => {
-      const nextId = `bet-${Date.now()}`;
-
-      const createdBet: Bet = {
-        id: nextId,
-        creatorId: currentUser.id,
-        title: newBet.title,
-        participants: [currentUser.name, "Lina", "Max"],
-        options: [
-          {
-            id: `o1-${nextId}`,
-            label: newBet.option1,
-            pot: 0,
-            odds: newBet.odds1,
-          },
-          {
-            id: `o2-${nextId}`,
-            label: newBet.option2,
-            pot: 0,
-            odds: newBet.odds2,
-          },
-        ],
-        status: "active",
-      };
-
-      return [createdBet, ...prev];
-    });
-
-    setIsLoading(false);
-  }, [currentUser.id, currentUser.name]);
-
-  const deleteBet = useCallback(async (betId: string) => {
-    setIsLoading(true);
-    await fakeLatency();
-
-    const bet = bets.find((item) => item.id === betId);
-    if (!bet || bet.creatorId !== currentUser.id) {
-      setIsLoading(false);
-      return false;
-    }
-
-    setBets((prev) => prev.filter((item) => item.id !== betId));
-    setBetSlipSelections((prev) => prev.filter((item) => item.betId !== betId));
-    setSelectedOptions((prev) => {
-      const next = { ...prev };
-      delete next[betId];
-      return next;
-    });
-    setPlacedBets((prev) => prev.filter((ticket) => !ticket.legs.some((leg) => leg.betId === betId)));
-    setIsLoading(false);
-    return true;
-  }, [bets, currentUser.id]);
+      try {
+        setIsLoading(true);
+        await deleteBetService(betId);
+        setBetSlipSelections((prev) => prev.filter((item) => item.bet_id !== betId));
+        await refreshAll();
+        return true;
+      } catch (error) {
+        toast.error("Suppression impossible.");
+        console.error(error);
+        return false;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [bets, currentUser.id, refreshAll],
+  );
 
   const value = useMemo(
     () => ({
       currentUser,
-      isLoading,
       bets,
+      wagers,
+      users,
+      isLoading,
+      isBetting,
+      activeFilter,
+      setActiveFilter,
       betSlipSelections,
       selectedOptions,
       addToBetSlip,
@@ -315,13 +303,19 @@ export function NuggetProvider({ children }: { children: React.ReactNode }) {
       clearBetSlip,
       placeBet,
       addBet,
+      closeBet,
       resolveBet,
       deleteBet,
+      refreshAll,
     }),
     [
       currentUser,
-      isLoading,
       bets,
+      wagers,
+      users,
+      isLoading,
+      isBetting,
+      activeFilter,
       betSlipSelections,
       selectedOptions,
       addToBetSlip,
@@ -329,8 +323,10 @@ export function NuggetProvider({ children }: { children: React.ReactNode }) {
       clearBetSlip,
       placeBet,
       addBet,
+      closeBet,
       resolveBet,
       deleteBet,
+      refreshAll,
     ],
   );
 
@@ -345,4 +341,4 @@ export function useNuggetContext() {
   return context;
 }
 
-export type { NewBetInput };
+export type { NewBetInput, BetSlipSelection };

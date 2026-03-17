@@ -1,27 +1,51 @@
-export type BetStatus = "active" | "resolved";
+export type BetStatus = "open" | "closed" | "resolved";
 
-export type User = {
+export type WagerStatus = "pending" | "won" | "lost";
+
+export type UserRow = {
   id: string;
-  name: string;
-  avatarUrl?: string;
-  nuggets: number;
+  username: string;
+  avatar_url?: string;
+  nuggets_balance: number;
+  created_at: string;
 };
 
-export type BetOption = {
+export type BetRow = {
   id: string;
-  label: string;
-  pot: number;
+  creator_id: string;
+  title: string;
+  description: string;
+  status: BetStatus;
+  winning_option_id?: string | null;
+  created_at: string;
+  resolved_at?: string | null;
+};
+
+export type BetOptionRow = {
+  id: string;
+  bet_id: string;
+  title: string;
   odds: number;
 };
 
-export type Bet = {
+export type WagerRow = {
   id: string;
-  creatorId: string;
-  title: string;
-  participants: string[];
-  options: [BetOption, BetOption];
-  status: BetStatus;
-  winningOptionId?: string;
+  user_id: string;
+  bet_id: string;
+  option_id: string;
+  amount: number;
+  potential_payout: number;
+  status: WagerStatus;
+  created_at: string;
 };
 
-export type BetFilter = "all" | "active" | "resolved";
+export type BetWithOptions = BetRow & {
+  options: BetOptionRow[];
+};
+
+export type WagerWithContext = WagerRow & {
+  bet_title: string;
+  option_title: string;
+};
+
+export type BetFilter = "all" | BetStatus;

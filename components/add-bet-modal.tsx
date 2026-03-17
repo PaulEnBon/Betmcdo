@@ -14,6 +14,7 @@ type AddBetModalProps = {
 export function AddBetModal({ isOpen, onClose }: AddBetModalProps) {
   const { addBet, isLoading } = useNuggetContext();
   const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
   const [option1, setOption1] = useState("");
   const [option2, setOption2] = useState("");
   const [odds1, setOdds1] = useState("1.50");
@@ -25,11 +26,12 @@ export function AddBetModal({ isOpen, onClose }: AddBetModalProps) {
   const canCreate = useMemo(
     () =>
       title.trim().length > 0 &&
+      description.trim().length > 0 &&
       option1.trim().length > 0 &&
       option2.trim().length > 0 &&
       odds1Number > 1 &&
       odds2Number > 1,
-    [title, option1, option2, odds1Number, odds2Number],
+    [title, description, option1, option2, odds1Number, odds2Number],
   );
 
   const handleCreateBet = async () => {
@@ -37,6 +39,7 @@ export function AddBetModal({ isOpen, onClose }: AddBetModalProps) {
 
     await addBet({
       title: title.trim(),
+      description: description.trim(),
       option1: option1.trim(),
       option2: option2.trim(),
       odds1: odds1Number,
@@ -45,6 +48,7 @@ export function AddBetModal({ isOpen, onClose }: AddBetModalProps) {
 
     toast.success("Pari enregistré !");
     setTitle("");
+    setDescription("");
     setOption1("");
     setOption2("");
     setOdds1("1.50");
@@ -86,6 +90,13 @@ export function AddBetModal({ isOpen, onClose }: AddBetModalProps) {
                 type="text"
                 placeholder="Titre du pari"
                 className="w-full rounded-xl border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-slate-100 outline-none transition focus:border-green-500 focus:ring-2 focus:ring-green-500/25"
+              />
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Description rapide de l'événement"
+                rows={2}
+                className="w-full resize-none rounded-xl border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-slate-100 outline-none transition focus:border-green-500 focus:ring-2 focus:ring-green-500/25"
               />
               <input
                 value={option1}
