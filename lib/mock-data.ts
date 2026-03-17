@@ -5,14 +5,20 @@ export const mockBets: Bet[] = [
     id: 1,
     title: "Est-ce que Thomas va renverser son verre avant minuit ?",
     participants: ["Thomas", "Lina", "Max", "Inès"],
-    optionA: { label: "Oui, évidemment", pot: 120 },
-    optionB: { label: "Non, il est prudent", pot: 80 },
+    options: [
+      { id: "yes", label: "Oui, évidemment", pot: 120, odds: 1.5 },
+      { id: "no", label: "Non, il est prudent", pot: 80, odds: 2.1 },
+    ],
+    status: "active",
   },
   {
     id: 2,
     title: "Qui arrivera en retard au brunch de dimanche ?",
     participants: ["Sarah", "Noé", "Clara", "Amine", "Léo"],
-    optionA: { label: "Team Sarah", pot: 65 },
-    optionB: { label: "Team Noé", pot: 95 },
+    options: [
+      { id: "sarah", label: "Team Sarah", pot: 65, odds: 1.9 },
+      { id: "noe", label: "Team Noé", pot: 95, odds: 1.7 },
+    ],
+    status: "active",
   },
 ];
