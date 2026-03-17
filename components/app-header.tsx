@@ -6,7 +6,7 @@ type AppHeaderProps = {
 
 export function AppHeader({ nuggets }: AppHeaderProps) {
   return (
-    <header className="sticky top-4 z-10 mb-6 rounded-2xl border border-amber-200/60 bg-white/90 p-4 shadow-sm backdrop-blur">
+    <header className="sticky top-4 z-10 mb-6 rounded-2xl border border-amber-200/60 bg-white/90 p-4 shadow-lg shadow-amber-100/40 backdrop-blur">
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="text-xs font-medium uppercase tracking-wider text-amber-700">NuggetBet</p>
