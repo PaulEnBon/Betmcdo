@@ -9,6 +9,7 @@ import { BetSlip } from "@/components/bet-slip";
 import { BottomTabBar, Tab } from "@/components/bottom-tab-bar";
 import { FloatingAddButton } from "@/components/floating-add-button";
 import { Leaderboard } from "@/components/leaderboard";
+import { SideMenu } from "@/components/side-menu";
 import { useNuggetContext } from "@/context/NuggetContext";
 import { BetFilter } from "@/types/bet";
 
@@ -33,8 +34,9 @@ const cardVariants = {
 };
 
 export default function HomePage() {
-  const { nuggets, bets } = useNuggetContext();
+  const { currentUser, isLoading, bets } = useNuggetContext();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSideMenuOpen, setIsSideMenuOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>("bets");
   const [filter, setFilter] = useState<BetFilter>("all");
 
@@ -52,7 +54,7 @@ export default function HomePage() {
   return (
     <main className="min-h-screen bg-slate-900 text-slate-100">
       <div className="mx-auto w-full max-w-md px-4 pb-28 pt-6 sm:max-w-xl lg:max-w-2xl">
-        <AppHeader nuggets={nuggets} />
+        <AppHeader user={currentUser} isLoading={isLoading} onOpenMenu={() => setIsSideMenuOpen(true)} />
 
         {activeTab === "bets" ? (
           <>
@@ -94,6 +96,7 @@ export default function HomePage() {
       <AddBetModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
       {activeTab === "bets" && <BetSlip />}
       <BottomTabBar activeTab={activeTab} onChange={setActiveTab} />
+      <SideMenu isOpen={isSideMenuOpen} onClose={() => setIsSideMenuOpen(false)} user={currentUser} />
     </main>
   );
 }

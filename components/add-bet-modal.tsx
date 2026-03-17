@@ -12,7 +12,7 @@ type AddBetModalProps = {
 };
 
 export function AddBetModal({ isOpen, onClose }: AddBetModalProps) {
-  const { addBet } = useNuggetContext();
+  const { addBet, isLoading } = useNuggetContext();
   const [title, setTitle] = useState("");
   const [option1, setOption1] = useState("");
   const [option2, setOption2] = useState("");
@@ -32,10 +32,10 @@ export function AddBetModal({ isOpen, onClose }: AddBetModalProps) {
     [title, option1, option2, odds1Number, odds2Number],
   );
 
-  const handleCreateBet = () => {
+  const handleCreateBet = async () => {
     if (!canCreate) return;
 
-    addBet({
+    await addBet({
       title: title.trim(),
       option1: option1.trim(),
       option2: option2.trim(),
@@ -132,10 +132,10 @@ export function AddBetModal({ isOpen, onClose }: AddBetModalProps) {
 
             <button
               onClick={handleCreateBet}
-              disabled={!canCreate}
+              disabled={!canCreate || isLoading}
               className="mt-5 w-full rounded-xl bg-green-500 px-4 py-3 text-sm font-extrabold text-slate-950 shadow-sm transition enabled:hover:bg-green-400 enabled:active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40"
             >
-              Créer le pari
+              {isLoading ? "Chargement..." : "Créer le pari"}
             </button>
           </motion.div>
         </motion.div>

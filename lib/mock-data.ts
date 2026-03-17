@@ -2,7 +2,8 @@ import { Bet } from "@/types/bet";
 
 export const mockBets: Bet[] = [
   {
-    id: 1,
+    id: "bet-1",
+    creatorId: "user-1",
     title: "Est-ce que Thomas va renverser son verre avant minuit ?",
     participants: ["Thomas", "Lina", "Max", "Inès"],
     options: [
@@ -12,7 +13,8 @@ export const mockBets: Bet[] = [
     status: "active",
   },
   {
-    id: 2,
+    id: "bet-2",
+    creatorId: "user-2",
     title: "Qui arrivera en retard au brunch de dimanche ?",
     participants: ["Sarah", "Noé", "Clara", "Amine", "Léo"],
     options: [

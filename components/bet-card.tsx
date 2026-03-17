@@ -1,8 +1,10 @@
 "use client";
 
+import { useState } from "react";
 import { motion } from "framer-motion";
-import { CheckCircle2, Flag, Users } from "lucide-react";
+import { CheckCircle2, Flag, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { useNuggetContext } from "@/context/NuggetContext";
 import { Bet } from "@/types/bet";
 
@@ -11,9 +13,12 @@ type BetCardProps = {
 };
 
 export function BetCard({ bet }: BetCardProps) {
-  const { addToBetSlip, betSlipSelections, selectedOptions, resolveBet } = useNuggetContext();
+  const { addToBetSlip, betSlipSelections, selectedOptions, resolveBet, deleteBet, currentUser, isLoading } =
+    useNuggetContext();
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const selected = selectedOptions[bet.id];
   const selectedInSlip = betSlipSelections.find((item) => item.betId === bet.id)?.optionId;
+  const canDelete = bet.creatorId === currentUser.id;
 
   const handleSelectOdd = (optionId: string, label: string) => {
     if (bet.status !== "active") {
@@ -38,8 +43,8 @@ export function BetCard({ bet }: BetCardProps) {
     }
   };
 
-  const handleResolve = (winningOptionId: string, winningLabel: string) => {
-    const result = resolveBet(bet.id, winningOptionId);
+  const handleResolve = async (winningOptionId: string, winningLabel: string) => {
+    const result = await resolveBet(bet.id, winningOptionId);
 
     if (!result.ok) {
       toast.error("Pari déjà résolu.");
@@ -54,17 +59,42 @@ export function BetCard({ bet }: BetCardProps) {
     toast.success(`Pari résolu: ${winningLabel}`);
   };
 
+  const handleDeleteBet = async () => {
+    const deleted = await deleteBet(bet.id);
+    if (!deleted) {
+      toast.error("Suppression impossible.");
+      return;
+    }
+
+    setIsDeleteDialogOpen(false);
+    toast.success("Pari supprimé avec succès.");
+  };
+
   return (
     <article className="rounded-2xl border border-slate-700 bg-slate-800 p-4 shadow-lg shadow-black/30">
       <div className="mb-3 flex items-start justify-between gap-3">
         <h2 className="text-sm font-semibold leading-snug text-white sm:text-base">{bet.title}</h2>
-        <span
-          className={`rounded-full px-2 py-1 text-[10px] font-bold uppercase tracking-wide ${
-            bet.status === "active" ? "bg-green-500/20 text-green-400" : "bg-slate-700 text-slate-300"
-          }`}
-        >
-          {bet.status === "active" ? "En cours" : "Terminé"}
-        </span>
+
+        <div className="flex items-center gap-2">
+          <span
+            className={`rounded-full px-2 py-1 text-[10px] font-bold uppercase tracking-wide ${
+              bet.status === "active" ? "bg-green-500/20 text-green-400" : "bg-slate-700 text-slate-300"
+            }`}
+          >
+            {bet.status === "active" ? "En cours" : "Terminé"}
+          </span>
+
+          {canDelete && (
+            <button
+              onClick={() => setIsDeleteDialogOpen(true)}
+              disabled={isLoading}
+              className="rounded-lg border border-red-500/40 bg-red-500/10 p-1.5 text-red-300 transition hover:bg-red-500/20 disabled:opacity-50"
+              aria-label="Supprimer le pari"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="mb-4 inline-flex items-center gap-1 rounded-full bg-slate-700 px-3 py-1 text-xs font-medium text-slate-300">
@@ -81,6 +111,7 @@ export function BetCard({ bet }: BetCardProps) {
             <motion.button
               key={option.id}
               onClick={() => handleSelectOdd(option.id, option.label)}
+              disabled={isLoading}
               whileTap={{ scale: 0.985 }}
               className={`flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-400 ${
                 isSelected
@@ -107,6 +138,7 @@ export function BetCard({ bet }: BetCardProps) {
             <button
               key={`resolve-${option.id}`}
               onClick={() => handleResolve(option.id, option.label)}
+              disabled={isLoading}
               className="inline-flex items-center gap-1 rounded-xl border border-slate-600 bg-slate-700 px-3 py-1.5 text-xs font-semibold text-slate-200 transition hover:border-green-500 hover:text-green-300"
             >
               <Flag className="h-3.5 w-3.5" />
@@ -127,6 +159,16 @@ export function BetCard({ bet }: BetCardProps) {
           </p>
         ))}
       </div>
+
+      <ConfirmDialog
+        isOpen={isDeleteDialogOpen}
+        title="Supprimer ce pari ?"
+        description="Es-tu sûr de vouloir supprimer ce pari ? Cette action est irréversible."
+        confirmLabel="Supprimer"
+        isLoading={isLoading}
+        onCancel={() => setIsDeleteDialogOpen(false)}
+        onConfirm={handleDeleteBet}
+      />
     </article>
   );
 }

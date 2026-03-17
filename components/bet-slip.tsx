@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { useNuggetContext } from "@/context/NuggetContext";
 
 export function BetSlip() {
-  const { betSlipSelections, placeBet, clearBetSlip, removeFromBetSlip } = useNuggetContext();
+  const { betSlipSelections, placeBet, clearBetSlip, removeFromBetSlip, isLoading } = useNuggetContext();
   const [amount, setAmount] = useState("50");
 
   const amountNumber = Number(amount);
@@ -21,7 +21,7 @@ export function BetSlip() {
     return amountNumber * combinedOdds;
   }, [amountNumber, betSlipSelections.length, combinedOdds]);
 
-  const handlePlaceBet = () => {
+  const handlePlaceBet = async () => {
     if (betSlipSelections.length === 0) return;
 
     if (Number.isNaN(amountNumber) || amountNumber <= 0) {
@@ -29,7 +29,7 @@ export function BetSlip() {
       return;
     }
 
-    const result = placeBet(amountNumber);
+    const result = await placeBet(amountNumber);
 
     if (!result.ok) {
       if (result.reason === "INSUFFICIENT_FUNDS") {
@@ -61,6 +61,7 @@ export function BetSlip() {
               </div>
               <button
                 onClick={clearBetSlip}
+                disabled={isLoading}
                 className="rounded-full p-1.5 text-slate-400 transition hover:bg-slate-700 hover:text-slate-200"
                 aria-label="Fermer le panier"
               >
@@ -80,6 +81,7 @@ export function BetSlip() {
                   </div>
                   <button
                     onClick={() => removeFromBetSlip(selection.betId)}
+                    disabled={isLoading}
                     className="rounded-full p-1.5 text-slate-400 transition hover:bg-slate-700 hover:text-slate-100"
                     aria-label="Retirer la sélection"
                   >
@@ -98,6 +100,7 @@ export function BetSlip() {
                   step={1}
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
+                  disabled={isLoading}
                   className="rounded-xl border border-slate-600 bg-slate-900 px-3 py-2 text-sm font-bold text-slate-100 outline-none transition focus:border-green-500 focus:ring-2 focus:ring-green-500/25"
                 />
               </label>
@@ -115,9 +118,10 @@ export function BetSlip() {
 
             <button
               onClick={handlePlaceBet}
+              disabled={isLoading}
               className="mt-4 w-full rounded-xl bg-green-500 px-4 py-3 text-sm font-extrabold text-slate-950 transition hover:bg-green-400 active:scale-[0.99]"
             >
-              Placer le pari
+              {isLoading ? "Chargement..." : "Placer le pari"}
             </button>
           </div>
         </motion.div>

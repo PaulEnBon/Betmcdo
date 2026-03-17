@@ -2,10 +2,10 @@
 
 import { createContext, useCallback, useContext, useMemo, useState } from "react";
 import { mockBets } from "@/lib/mock-data";
-import { Bet } from "@/types/bet";
+import { Bet, User } from "@/types/bet";
 
 type BetSlipSelection = {
-  betId: number;
+  betId: string;
   optionId: string;
   optionLabel: string;
   odds: number;
@@ -40,28 +40,36 @@ type ResolveBetResult = {
 };
 
 type NuggetContextValue = {
-  nuggets: number;
+  currentUser: User;
+  isLoading: boolean;
   bets: Bet[];
   betSlipSelections: BetSlipSelection[];
-  selectedOptions: Record<number, string | undefined>;
-  addToBetSlip: (betId: number, optionId: string) => "added" | "replaced" | "removed" | "ignored";
-  removeFromBetSlip: (betId: number) => void;
+  selectedOptions: Record<string, string | undefined>;
+  addToBetSlip: (betId: string, optionId: string) => "added" | "replaced" | "removed" | "ignored";
+  removeFromBetSlip: (betId: string) => void;
   clearBetSlip: () => void;
-  placeBet: (amount: number) => PlaceBetResult;
-  addBet: (newBet: NewBetInput) => void;
-  resolveBet: (betId: number, winningOptionId: string) => ResolveBetResult;
+  placeBet: (amount: number) => Promise<PlaceBetResult>;
+  addBet: (newBet: NewBetInput) => Promise<void>;
+  resolveBet: (betId: string, winningOptionId: string) => Promise<ResolveBetResult>;
+  deleteBet: (betId: string) => Promise<boolean>;
 };
 
 const NuggetContext = createContext<NuggetContextValue | null>(null);
+const fakeLatency = (ms = 500) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export function NuggetProvider({ children }: { children: React.ReactNode }) {
-  const [nuggets, setNuggets] = useState(500);
+  const [currentUser, setCurrentUser] = useState<User>({
+    id: "user-1",
+    name: "Moi",
+    nuggets: 500,
+  });
+  const [isLoading, setIsLoading] = useState(false);
   const [bets, setBets] = useState<Bet[]>(mockBets);
-  const [selectedOptions, setSelectedOptions] = useState<Record<number, string | undefined>>({});
+  const [selectedOptions, setSelectedOptions] = useState<Record<string, string | undefined>>({});
   const [betSlipSelections, setBetSlipSelections] = useState<BetSlipSelection[]>([]);
   const [, setPlacedBets] = useState<PlacedBet[]>([]);
 
-  const addToBetSlip = useCallback((betId: number, optionId: string) => {
+  const addToBetSlip = useCallback((betId: string, optionId: string) => {
     const bet = bets.find((item) => item.id === betId);
     if (!bet || bet.status !== "active") return "ignored" as const;
 
@@ -95,7 +103,7 @@ export function NuggetProvider({ children }: { children: React.ReactNode }) {
     return action;
   }, [bets]);
 
-  const removeFromBetSlip = useCallback((betId: number) => {
+  const removeFromBetSlip = useCallback((betId: string) => {
     setBetSlipSelections((prev) => prev.filter((item) => item.betId !== betId));
   }, []);
 
@@ -103,19 +111,24 @@ export function NuggetProvider({ children }: { children: React.ReactNode }) {
     setBetSlipSelections([]);
   }, []);
 
-  const placeBet = useCallback((amount: number): PlaceBetResult => {
+  const placeBet = useCallback(async (amount: number): Promise<PlaceBetResult> => {
+    setIsLoading(true);
+    await fakeLatency();
+
     if (betSlipSelections.length === 0) {
+      setIsLoading(false);
       return { ok: false, reason: "NO_SELECTION" };
     }
 
-    if (nuggets < amount) {
+    if (currentUser.nuggets < amount) {
+      setIsLoading(false);
       return { ok: false, reason: "INSUFFICIENT_FUNDS" };
     }
 
     const combinedOdds = betSlipSelections.reduce((acc, leg) => acc * leg.odds, 1);
     const amountPerSelection = amount / betSlipSelections.length;
 
-    setNuggets((prev) => prev - amount);
+    setCurrentUser((prev) => ({ ...prev, nuggets: prev.nuggets - amount }));
 
     setSelectedOptions((prev) => {
       const next = { ...prev };
@@ -153,17 +166,23 @@ export function NuggetProvider({ children }: { children: React.ReactNode }) {
     );
 
     setBetSlipSelections([]);
+    setIsLoading(false);
 
     return { ok: true };
-  }, [betSlipSelections, nuggets]);
+  }, [betSlipSelections, currentUser.nuggets]);
 
-  const resolveBet = useCallback((betId: number, winningOptionId: string): ResolveBetResult => {
+  const resolveBet = useCallback(async (betId: string, winningOptionId: string): Promise<ResolveBetResult> => {
+    setIsLoading(true);
+    await fakeLatency();
+
     const targetBet = bets.find((bet) => bet.id === betId);
     if (!targetBet) {
+      setIsLoading(false);
       return { ok: false, payout: 0 };
     }
 
     if (targetBet.status === "resolved") {
+      setIsLoading(false);
       return { ok: false, payout: 0, reason: "ALREADY_RESOLVED" };
     }
 
@@ -218,22 +237,27 @@ export function NuggetProvider({ children }: { children: React.ReactNode }) {
     );
 
     if (payout > 0) {
-      setNuggets((prev) => prev + payout);
+      setCurrentUser((prev) => ({ ...prev, nuggets: prev.nuggets + payout }));
     }
 
     setBets(nextBets);
+    setIsLoading(false);
 
     return { ok: true, payout };
   }, [bets]);
 
-  const addBet = useCallback((newBet: NewBetInput) => {
+  const addBet = useCallback(async (newBet: NewBetInput) => {
+    setIsLoading(true);
+    await fakeLatency();
+
     setBets((prev) => {
-      const nextId = prev.length ? Math.max(...prev.map((bet) => bet.id)) + 1 : 1;
+      const nextId = `bet-${Date.now()}`;
 
       const createdBet: Bet = {
         id: nextId,
+        creatorId: currentUser.id,
         title: newBet.title,
-        participants: ["Vous", "Lina", "Max"],
+        participants: [currentUser.name, "Lina", "Max"],
         options: [
           {
             id: `o1-${nextId}`,
@@ -253,11 +277,36 @@ export function NuggetProvider({ children }: { children: React.ReactNode }) {
 
       return [createdBet, ...prev];
     });
-  }, []);
+
+    setIsLoading(false);
+  }, [currentUser.id, currentUser.name]);
+
+  const deleteBet = useCallback(async (betId: string) => {
+    setIsLoading(true);
+    await fakeLatency();
+
+    const bet = bets.find((item) => item.id === betId);
+    if (!bet || bet.creatorId !== currentUser.id) {
+      setIsLoading(false);
+      return false;
+    }
+
+    setBets((prev) => prev.filter((item) => item.id !== betId));
+    setBetSlipSelections((prev) => prev.filter((item) => item.betId !== betId));
+    setSelectedOptions((prev) => {
+      const next = { ...prev };
+      delete next[betId];
+      return next;
+    });
+    setPlacedBets((prev) => prev.filter((ticket) => !ticket.legs.some((leg) => leg.betId === betId)));
+    setIsLoading(false);
+    return true;
+  }, [bets, currentUser.id]);
 
   const value = useMemo(
     () => ({
-      nuggets,
+      currentUser,
+      isLoading,
       bets,
       betSlipSelections,
       selectedOptions,
@@ -267,8 +316,22 @@ export function NuggetProvider({ children }: { children: React.ReactNode }) {
       placeBet,
       addBet,
       resolveBet,
+      deleteBet,
     }),
-    [nuggets, bets, betSlipSelections, selectedOptions, addToBetSlip, removeFromBetSlip, clearBetSlip, placeBet, addBet, resolveBet],
+    [
+      currentUser,
+      isLoading,
+      bets,
+      betSlipSelections,
+      selectedOptions,
+      addToBetSlip,
+      removeFromBetSlip,
+      clearBetSlip,
+      placeBet,
+      addBet,
+      resolveBet,
+      deleteBet,
+    ],
   );
 
   return <NuggetContext.Provider value={value}>{children}</NuggetContext.Provider>;

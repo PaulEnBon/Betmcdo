@@ -1,5 +1,12 @@
 export type BetStatus = "active" | "resolved";
 
+export type User = {
+  id: string;
+  name: string;
+  avatarUrl?: string;
+  nuggets: number;
+};
+
 export type BetOption = {
   id: string;
   label: string;
@@ -8,7 +15,8 @@ export type BetOption = {
 };
 
 export type Bet = {
-  id: number;
+  id: string;
+  creatorId: string;
   title: string;
   participants: string[];
   options: [BetOption, BetOption];
