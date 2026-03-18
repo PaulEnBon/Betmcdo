@@ -145,19 +145,15 @@ export function NuggetProvider({ children }: { children: React.ReactNode }) {
       const selected = bet.options.find((option) => option.id === optionId);
       if (!selected) return "ignored" as const;
 
+      const existingForBet = betSlipSelections.find((item) => item.bet_id === betId);
       let action: "added" | "replaced" | "removed" = "added";
 
-      setBetSlipSelections((prev) => {
-        const existingForBet = prev.find((item) => item.bet_id === betId);
-
-        if (existingForBet?.option_id === optionId) {
-          action = "removed";
-          return prev.filter((item) => item.bet_id !== betId);
-        }
-
+      if (existingForBet?.option_id === optionId) {
+        action = "removed";
+        setBetSlipSelections((prev) => prev.filter((item) => item.bet_id !== betId));
+      } else {
         if (existingForBet) action = "replaced";
-
-        return [
+        setBetSlipSelections((prev) => [
           ...prev.filter((item) => item.bet_id !== betId),
           {
             bet_id: betId,
@@ -165,12 +161,12 @@ export function NuggetProvider({ children }: { children: React.ReactNode }) {
             option_title: selected.title,
             odds: selected.odds,
           },
-        ];
-      });
+        ]);
+      }
 
       return action;
     },
-    [bets],
+    [bets, betSlipSelections],
   );
 
   const removeFromBetSlip = useCallback((betId: string) => {
@@ -236,7 +232,6 @@ export function NuggetProvider({ children }: { children: React.ReactNode }) {
     async (newBet: NewBetInput) => {
       try {
         setIsLoading(true);
-        // Correction ici : On envoie les arguments exactement comme Supabase les attend
         await createBet(
           newBet.title,
           newBet.description || "",
@@ -301,7 +296,10 @@ export function NuggetProvider({ children }: { children: React.ReactNode }) {
   const deleteBet = useCallback(
     async (betId: string) => {
       const target = bets.find((b) => b.id === betId);
-      if (!target || target.creator_id !== currentUser.id) return false;
+      // Double sécurité TypeScript (camelCase et snake_case)
+      const targetCreatorId = (target as any)?.creatorId || (target as any)?.creator_id;
+      
+      if (!target || targetCreatorId !== currentUser.id) return false;
 
       try {
         setIsLoading(true);
@@ -350,6 +348,7 @@ export function NuggetProvider({ children }: { children: React.ReactNode }) {
       isLoading,
       isBetting,
       activeFilter,
+      setActiveFilter,
       betSlipSelections,
       selectedOptions,
       addToBetSlip,
@@ -373,7 +372,6 @@ export function useNuggetContext() {
   return context;
 }
 
-// On exporte également useNugget pour s'assurer que les composants qui l'utilisent sous ce nom continuent de fonctionner
 export const useNugget = useNuggetContext;
 
 export type { NewBetInput, BetSlipSelection };

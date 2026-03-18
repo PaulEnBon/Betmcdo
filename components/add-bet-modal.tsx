@@ -28,16 +28,14 @@ export function AddBetModal({ isOpen, onClose }: AddBetModalProps) {
 
     setIsSubmitting(true);
     try {
-      // On formate les options comme Supabase l'attend (Titre + Cote par défaut)
-      const formattedOptions = [
-        { title: option1, odds: 2.0 },
-        { title: option2, odds: 2.0 },
-      ];
-
+      // On envoie les données EXACTEMENT comme le contexte les attend
       await addBet({
         title,
         description,
-        options: formattedOptions,
+        option1,
+        option2,
+        odds1: 2.0, // Cote par défaut de 2.0
+        odds2: 2.0, // Cote par défaut de 2.0
       });
 
       // Réinitialisation du formulaire
