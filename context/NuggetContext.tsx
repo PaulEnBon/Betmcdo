@@ -99,6 +99,8 @@ export function NuggetProvider({ children }: { children: React.ReactNode }) {
       setIsLoading(true);
       const userData = await getCurrentUser();
 
+      if (!userData) return;
+
       const [betsData, wagersData, usersData] = await Promise.all([
         fetchBets(),
         fetchUserWagers(userData.id),
@@ -124,34 +126,10 @@ export function NuggetProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const channel = supabase
       .channel("nugget-realtime")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "users" },
-        () => {
-          void refreshAll();
-        },
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "bets" },
-        () => {
-          void refreshAll();
-        },
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "bet_options" },
-        () => {
-          void refreshAll();
-        },
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "wagers" },
-        () => {
-          void refreshAll();
-        },
-      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "users" }, () => void refreshAll())
+      .on("postgres_changes", { event: "*", schema: "public", table: "bets" }, () => void refreshAll())
+      .on("postgres_changes", { event: "*", schema: "public", table: "bet_options" }, () => void refreshAll())
+      .on("postgres_changes", { event: "*", schema: "public", table: "wagers" }, () => void refreshAll())
       .subscribe();
 
     return () => {
@@ -177,9 +155,7 @@ export function NuggetProvider({ children }: { children: React.ReactNode }) {
           return prev.filter((item) => item.bet_id !== betId);
         }
 
-        if (existingForBet) {
-          action = "replaced";
-        }
+        if (existingForBet) action = "replaced";
 
         return [
           ...prev.filter((item) => item.bet_id !== betId),
@@ -211,18 +187,26 @@ export function NuggetProvider({ children }: { children: React.ReactNode }) {
         return { ok: false, reason: "NO_SELECTION" };
       }
 
-      if (currentUser.nuggets_balance < amount) {
+      const totalCost = amount * betSlipSelections.length;
+
+      if (currentUser.nuggets_balance < totalCost) {
         return { ok: false, reason: "INSUFFICIENT_FUNDS" };
       }
 
       try {
         setIsBetting(true);
 
-        await placeWager({
-          user_id: currentUser.id,
-          selections: betSlipSelections.map((s) => ({ bet_id: s.bet_id, option_id: s.option_id })),
-          amount,
-        });
+        // On place un pari (wager) pour chaque sélection dans le panier
+        for (const selection of betSlipSelections) {
+          const potentialPayout = Math.round(amount * selection.odds);
+          await placeWager(
+            currentUser.id,
+            selection.bet_id,
+            selection.option_id,
+            amount,
+            potentialPayout
+          );
+        }
 
         setSelectedOptions((prev) => {
           const next = { ...prev };
@@ -234,20 +218,12 @@ export function NuggetProvider({ children }: { children: React.ReactNode }) {
 
         setBetSlipSelections([]);
         await refreshAll();
+        toast.success("Pari(s) validé(s) !");
         return { ok: true };
       } catch (error) {
         const message = getErrorMessage(error, "Échec de placement du pari.");
         toast.error(message);
         console.error(error);
-
-        if (message.includes("Solde insuffisant")) {
-          return { ok: false, reason: "INSUFFICIENT_FUNDS" };
-        }
-
-        if (message.includes("Aucune sélection")) {
-          return { ok: false, reason: "NO_SELECTION" };
-        }
-
         return { ok: false };
       } finally {
         setIsBetting(false);
@@ -260,16 +236,18 @@ export function NuggetProvider({ children }: { children: React.ReactNode }) {
     async (newBet: NewBetInput) => {
       try {
         setIsLoading(true);
-        await createBet({
-          creator_id: currentUser.id,
-          title: newBet.title,
-          description: newBet.description,
-          option_1_title: newBet.option1,
-          option_1_odds: newBet.odds1,
-          option_2_title: newBet.option2,
-          option_2_odds: newBet.odds2,
-        });
+        // Correction ici : On envoie les arguments exactement comme Supabase les attend
+        await createBet(
+          newBet.title,
+          newBet.description || "",
+          currentUser.id,
+          [
+            { title: newBet.option1, odds: newBet.odds1 || 2.0 },
+            { title: newBet.option2, odds: newBet.odds2 || 2.0 }
+          ]
+        );
         await refreshAll();
+        toast.success("Pari créé avec succès !");
       } catch (error) {
         toast.error(getErrorMessage(error, "Échec de création du pari."));
         console.error(error);
@@ -323,9 +301,7 @@ export function NuggetProvider({ children }: { children: React.ReactNode }) {
   const deleteBet = useCallback(
     async (betId: string) => {
       const target = bets.find((b) => b.id === betId);
-      if (!target || target.creator_id !== currentUser.id) {
-        return false;
-      }
+      if (!target || target.creator_id !== currentUser.id) return false;
 
       try {
         setIsLoading(true);
@@ -393,10 +369,11 @@ export function NuggetProvider({ children }: { children: React.ReactNode }) {
 
 export function useNuggetContext() {
   const context = useContext(NuggetContext);
-  if (!context) {
-    throw new Error("useNuggetContext must be used within NuggetProvider");
-  }
+  if (!context) throw new Error("useNuggetContext must be used within NuggetProvider");
   return context;
 }
+
+// On exporte également useNugget pour s'assurer que les composants qui l'utilisent sous ce nom continuent de fonctionner
+export const useNugget = useNuggetContext;
 
 export type { NewBetInput, BetSlipSelection };
