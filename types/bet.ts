@@ -5,9 +5,11 @@ export type WagerStatus = "pending" | "won" | "lost";
 export type UserRow = {
   id: string;
   username: string;
-  avatar_url?: string;
+  avatar_url?: string | null;
   nuggets_balance: number;
   created_at: string;
+  name?: string;
+  nuggets?: number;
 };
 
 export type BetRow = {
