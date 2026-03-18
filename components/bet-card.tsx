@@ -118,7 +118,7 @@ export function BetCard({ bet }: BetCardProps) {
       )}
 
       <div className="space-y-2">
-        {bet.options.map((option) => {
+        {(bet.options || []).map((option) => {
           const isSelected = selected === option.id || selectedInSlip === option.id;
           const isWinning = bet.status === "resolved" && bet.winning_option_id === option.id;
 
@@ -160,7 +160,8 @@ export function BetCard({ bet }: BetCardProps) {
 
       {isCreator && bet.status !== "resolved" && (
         <div className="mt-3 flex gap-2">
-          {bet.options.map((option) => (
+          {
+          (bet.options || []).map((option) => (
             <button
               key={`resolve-${option.id}`}
               onClick={() => handleResolve(option.id, option.title)}
