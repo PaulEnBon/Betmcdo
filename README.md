@@ -1,5 +1,7 @@
 # NuggetBet
 
+rwHnqzpno768c0oL
+
 Application web mobile-first de paris privés et fun entre amis (sans argent réel), avec une monnaie virtuelle: le Nugget.
 
 ## Stack
@@ -30,7 +32,9 @@ Application web mobile-first de paris privés et fun entre amis (sans argent ré
   - bet-card.tsx
   - floating-add-button.tsx
 - lib/
-  - mock-data.ts
+  - supabase.ts
+- services/
+  - supabase-service.ts
 - types/
   - bet.ts
 - eslint.config.mjs
